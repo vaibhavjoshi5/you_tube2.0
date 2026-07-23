@@ -2,7 +2,7 @@
 
 YourTube is the existing training project extended with all six ElevanceSkills
 internship assignments. It uses Next.js, React, Tailwind CSS, Express,
-MongoDB, Firebase Authentication, Razorpay, Socket.IO and WebRTC.
+MongoDB, Firebase Authentication, Razorpay and WebRTC.
 
 ## Training project continuity
 
@@ -51,7 +51,7 @@ application and are not implemented as a separate project.
      because browsers cannot close tabs they did not open.
 6. WebRTC video calls
    - Invite-link room calls with camera and microphone controls.
-   - Socket.IO signaling.
+   - MongoDB-backed REST signaling that works on free serverless hosting.
    - Browser-tab screen sharing for a user-selected YouTube tab.
    - Local call recording and automatic WebM download.
 
@@ -100,12 +100,18 @@ npm run build
 
 ## Deployment
 
-- Deploy `yourtube` to Vercel and set all `NEXT_PUBLIC_*` variables.
-- Deploy `server` as the Render service defined in `render.yaml`.
+- Create one Vercel project with Root Directory `server` for the Express API.
+- Create a second Vercel project with Root Directory `yourtube` for Next.js.
+- Set the server project variables from `server/.env.example`.
+- Set the frontend project variables from `yourtube/.env.example`.
 - Set the backend `CLIENT_URL` to the Vercel URL.
-- Set the frontend `NEXT_PUBLIC_BACKEND_URL` to the Render URL.
+- Set the frontend `NEXT_PUBLIC_BACKEND_URL` to the API Vercel URL.
 - Add the Vercel domain to Firebase Authentication's authorized domains.
 - Use Razorpay test keys until evaluation is complete.
+
+The Express app exports its application instance for Vercel while retaining
+the normal local `npm start` listener. Call signaling uses short-lived MongoDB
+records, so it does not require a paid persistent WebSocket server.
 
 Camera, microphone, geolocation and screen sharing require HTTPS in
 production. Screen sharing always requires the user to choose the tab or
