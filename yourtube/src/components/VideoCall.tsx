@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { io, Socket } from "socket.io-client";
 import {
   Copy,
   Circle,
@@ -26,7 +25,10 @@ export default function VideoCall({ initialRoom = "" }: VideoCallProps) {
   const localStream = useRef<MediaStream | null>(null);
   const remoteStream = useRef<MediaStream | null>(null);
   const peer = useRef<RTCPeerConnection | null>(null);
-  const socket = useRef<Socket | null>(null);
+  const peerId = useRef("");
+  const signalCursor = useRef("");
+  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pendingCandidates = useRef<RTCIceCandidateInit[]>([]);
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const recordingCleanup = useRef<(() => void) | null>(null);
@@ -43,7 +45,7 @@ export default function VideoCall({ initialRoom = "" }: VideoCallProps) {
 
   useEffect(
     () => () => {
-      socket.current?.disconnect();
+      if (pollTimer.current) clearInterval(pollTimer.current);
       peer.current?.close();
       localStream.current?.getTracks().forEach((track) => track.stop());
       recordingCleanup.current?.();
@@ -72,10 +74,7 @@ export default function VideoCall({ initialRoom = "" }: VideoCallProps) {
     };
     connection.onicecandidate = (event) => {
       if (event.candidate) {
-        socket.current?.emit("ice-candidate", {
-          roomId,
-          candidate: event.candidate,
-        });
+        sendSignal("candidate", event.candidate.toJSON());
       }
     };
     connection.onconnectionstatechange = () => {
@@ -85,8 +84,71 @@ export default function VideoCall({ initialRoom = "" }: VideoCallProps) {
     return connection;
   };
 
+  const sendSignal = async (type: string, payload: unknown = null) => {
+    const response = await fetch(`${backendUrl}/call/signal`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        roomId: roomId.trim(),
+        peerId: peerId.current,
+        type,
+        payload,
+      }),
+    });
+    if (!response.ok) throw new Error("Call signaling failed");
+  };
+
+  const flushCandidates = async () => {
+    if (!peer.current?.remoteDescription) return;
+    const candidates = pendingCandidates.current.splice(0);
+    for (const candidate of candidates) {
+      await peer.current.addIceCandidate(candidate);
+    }
+  };
+
+  const processSignals = async () => {
+    const query = new URLSearchParams({
+      roomId: roomId.trim(),
+      peerId: peerId.current,
+    });
+    if (signalCursor.current) query.set("after", signalCursor.current);
+    const response = await fetch(`${backendUrl}/call/signals?${query}`);
+    if (!response.ok) throw new Error("Could not read call signals");
+    const signals = await response.json();
+
+    for (const signal of signals) {
+      signalCursor.current = signal.id;
+      if (signal.type === "join" && peerId.current < signal.from) {
+        const connection = createPeer();
+        const offer = await connection.createOffer();
+        await connection.setLocalDescription(offer);
+        await sendSignal("offer", offer);
+      } else if (signal.type === "offer") {
+        const connection = createPeer();
+        await connection.setRemoteDescription(signal.payload);
+        await flushCandidates();
+        const answer = await connection.createAnswer();
+        await connection.setLocalDescription(answer);
+        await sendSignal("answer", answer);
+      } else if (signal.type === "answer") {
+        await peer.current?.setRemoteDescription(signal.payload);
+        await flushCandidates();
+      } else if (signal.type === "candidate" && signal.payload) {
+        if (peer.current?.remoteDescription) {
+          await peer.current.addIceCandidate(signal.payload);
+        } else {
+          pendingCandidates.current.push(signal.payload);
+        }
+      } else if (signal.type === "leave") {
+        setConnected(false);
+        remoteStream.current = null;
+        if (remoteVideo.current) remoteVideo.current.srcObject = null;
+      }
+    }
+  };
+
   const joinCall = async () => {
-    if (!roomId.trim()) {
+    if (!/^[a-zA-Z0-9_-]{1,80}$/.test(roomId.trim())) {
       toast.error("Enter or create a room code");
       return;
     }
@@ -98,39 +160,13 @@ export default function VideoCall({ initialRoom = "" }: VideoCallProps) {
       });
       if (localVideo.current) localVideo.current.srcObject = localStream.current;
 
-      const client = io(backendUrl, { transports: ["websocket", "polling"] });
-      socket.current = client;
-
-      client.on("peer-joined", async () => {
-        const connection = createPeer();
-        const offer = await connection.createOffer();
-        await connection.setLocalDescription(offer);
-        client.emit("webrtc-offer", { roomId, offer });
-      });
-
-      client.on("webrtc-offer", async ({ offer }) => {
-        const connection = createPeer();
-        await connection.setRemoteDescription(offer);
-        const answer = await connection.createAnswer();
-        await connection.setLocalDescription(answer);
-        client.emit("webrtc-answer", { roomId, answer });
-      });
-
-      client.on("webrtc-answer", async ({ answer }) => {
-        await peer.current?.setRemoteDescription(answer);
-      });
-
-      client.on("ice-candidate", async ({ candidate }) => {
-        if (candidate) await peer.current?.addIceCandidate(candidate);
-      });
-
-      client.on("peer-left", () => {
-        setConnected(false);
-        remoteStream.current = null;
-        if (remoteVideo.current) remoteVideo.current.srcObject = null;
-      });
-
-      client.emit("join-room", roomId);
+      peerId.current = crypto.randomUUID();
+      signalCursor.current = "";
+      await sendSignal("join");
+      await processSignals();
+      pollTimer.current = setInterval(() => {
+        processSignals().catch((error) => console.error(error));
+      }, 1000);
       setJoined(true);
     } catch (error) {
       console.error(error);
@@ -139,12 +175,14 @@ export default function VideoCall({ initialRoom = "" }: VideoCallProps) {
   };
 
   const leaveCall = () => {
-    socket.current?.emit("leave-room", roomId);
-    socket.current?.disconnect();
+    sendSignal("leave").catch(() => undefined);
+    if (pollTimer.current) clearInterval(pollTimer.current);
+    pollTimer.current = null;
     peer.current?.close();
     localStream.current?.getTracks().forEach((track) => track.stop());
     remoteStream.current?.getTracks().forEach((track) => track.stop());
     peer.current = null;
+    pendingCandidates.current = [];
     setJoined(false);
     setConnected(false);
   };
