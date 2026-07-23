@@ -7,7 +7,10 @@ const firebaseApp =
   initializeApp(
     serviceAccount
       ? { credential: cert(JSON.parse(serviceAccount)) }
-      : undefined
+      : {
+          projectId:
+            process.env.FIREBASE_PROJECT_ID || "yourtube-8cda9",
+        }
   );
 
 // Preserve the small API used by the auth controller while using the modular
