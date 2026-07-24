@@ -50,10 +50,7 @@ export const downloadVideo = async (req, res) => {
 
     const safeFilename = video.filename.replace(/["\r\n]/g, "_");
     if (blobDownloadUrl) {
-      return res.status(200).json({
-        downloadUrl: blobDownloadUrl,
-        filename: safeFilename,
-      });
+      return res.redirect(307, blobDownloadUrl);
     }
 
     res.setHeader("Content-Type", video.filetype || "video/mp4");
