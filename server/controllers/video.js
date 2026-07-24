@@ -40,6 +40,49 @@ export const uploadvideo = async (req, res) => {
     }
   }
 };
+
+export const registervideo = async (req, res) => {
+  try {
+    const {
+      videotitle,
+      filename,
+      filepath,
+      filetype,
+      filesize,
+      videochanel,
+      uploader,
+    } = req.body;
+
+    if (
+      !videotitle?.trim() ||
+      !filename?.trim() ||
+      !filepath?.startsWith("https://") ||
+      filetype !== "video/mp4" ||
+      !Number.isFinite(Number(filesize)) ||
+      Number(filesize) <= 0 ||
+      Number(filesize) > 500 * 1024 * 1024 ||
+      !videochanel?.trim()
+    ) {
+      return res.status(400).json({ message: "Invalid video details" });
+    }
+
+    const file = await video.create({
+      videotitle: videotitle.trim(),
+      filename: filename.trim(),
+      filepath,
+      filetype,
+      filesize: Number(filesize),
+      videochanel: videochanel.trim(),
+      uploader,
+    });
+
+    return res.status(201).json(file);
+  } catch (error) {
+    console.error("Video registration error:", error);
+    return res.status(500).json({ message: "Unable to save video details" });
+  }
+};
+
 export const getallvideo = async (req, res) => {
   try {
     const files = await video.find();

@@ -6,6 +6,8 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Progress } from "./ui/progress";
 import axiosInstance from "@/lib/axiosinstance";
+import { backendUrl } from "@/lib/axiosinstance";
+import { upload } from "@vercel/blob/client";
 
 const VideoUploader = ({ channelId, channelName }: any) => {
   const [isUploading, setIsUploading] = useState(false);
@@ -13,6 +15,7 @@ const VideoUploader = ({ channelId, channelName }: any) => {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoTitle, setVideoTitle] = useState("");
   const [uploadComplete, setUploadComplete] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handlefilechange = (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -22,8 +25,8 @@ const VideoUploader = ({ channelId, channelName }: any) => {
         toast.error("Please upload an MP4 video file.");
         return;
       }
-      if (file.size > 4 * 1024 * 1024) {
-        toast.error("The hosted demo accepts videos up to 4 MB.");
+      if (file.size > 500 * 1024 * 1024) {
+        toast.error("Please select an MP4 video up to 500 MB.");
         return;
       }
       setVideoFile(file);
@@ -45,31 +48,49 @@ const VideoUploader = ({ channelId, channelName }: any) => {
   };
   const cancelUpload = () => {
     if (isUploading) {
+      abortControllerRef.current?.abort();
       toast.error("Your video upload has been cancelled");
     }
+    resetForm();
   };
   const handleUpload = async () => {
     if (!videoFile || !videoTitle.trim()) {
       toast.error("Please provide file and title");
       return;
     }
-    const formdata = new FormData();
-    formdata.append("file", videoFile);
-    formdata.append("videotitle", videoTitle);
-    formdata.append("videochanel", channelName);
-    formdata.append("uploader", channelId);
-    console.log(formdata)
     try {
       setIsUploading(true);
       setUploadProgress(0);
-      await axiosInstance.post("/video/upload", formdata, {
-        onUploadProgress: (progresEvent: any) => {
-          const progress = Math.round(
-            (progresEvent.loaded * 100) / progresEvent.total
-          );
-          setUploadProgress(progress);
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const token = localStorage.getItem("authToken");
+      const blob = await upload(
+        `videos/${channelId}/${Date.now()}-${videoFile.name}`,
+        videoFile,
+        {
+          access: "public",
+          handleUploadUrl: `${backendUrl}/video/blob-upload`,
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          contentType: "video/mp4",
+          multipart: true,
+          abortSignal: controller.signal,
+          onUploadProgress: ({ percentage }) => {
+            setUploadProgress(Math.round(percentage));
+          },
         },
+      );
+
+      await axiosInstance.post("/video/register", {
+        videotitle: videoTitle,
+        filename: videoFile.name,
+        filepath: blob.url,
+        filetype: videoFile.type,
+        filesize: videoFile.size,
+        videochanel: channelName,
+        uploader: channelId,
       });
+
+      setUploadComplete(true);
       toast.success("Upload successfully");
       resetForm();
     } catch (error) {
@@ -79,6 +100,7 @@ const VideoUploader = ({ channelId, channelName }: any) => {
           "There was an error uploading your video. Please try again."
       );
     } finally {
+      abortControllerRef.current = null;
       setIsUploading(false);
     }
   };
@@ -100,7 +122,7 @@ const VideoUploader = ({ channelId, channelName }: any) => {
               or click to select files
             </p>
             <p className="text-xs text-gray-400 mt-4">
-              MP4 • Up to 4 MB on the hosted demo
+              MP4 • Up to 500 MB
             </p>
             <input
               type="file"
