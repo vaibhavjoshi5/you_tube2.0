@@ -12,8 +12,8 @@ import commentroutes from "./routes/comment.js";
 import paymentroutes from "./routes/payment.js";
 import downloadroutes from "./routes/download.js";
 import callroutes from "./routes/call.js";
+import multer from "multer";
 const app = express();
-import path from "path";
 
 const DBURL = process.env.DB_URL;
 let databasePromise;
@@ -52,7 +52,6 @@ app.use(
 );
 app.use(express.json({ limit: "30mb", extended: true }));
 app.use(express.urlencoded({ limit: "30mb", extended: true }));
-app.use("/uploads", express.static(path.join("uploads")));
 app.use(async (req, res, next) => {
   try {
     await connectDatabase();
@@ -84,6 +83,14 @@ const PORT = process.env.PORT || 5000;
 
 app.use((error, req, res, next) => {
   console.error(error);
+  if (error instanceof multer.MulterError) {
+    if (error.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({
+        message: "Video is too large. The hosted demo accepts MP4 files up to 4 MB.",
+      });
+    }
+    return res.status(400).json({ message: "Please upload one MP4 video file" });
+  }
   res.status(500).json({ message: "Unexpected server error" });
 });
 

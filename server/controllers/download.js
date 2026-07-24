@@ -1,8 +1,7 @@
-import fs from "fs";
-import path from "path";
 import downloads from "../Modals/download.js";
 import videos from "../Modals/video.js";
 import { plans } from "../config/plans.js";
+import { findVideoFile, openVideoStream } from "../services/videoStorage.js";
 
 const startOfTodayInIst = () => {
   const offset = 330 * 60 * 1000;
@@ -33,8 +32,10 @@ export const downloadVideo = async (req, res) => {
       }
     }
 
-    const filepath = path.resolve(video.filepath);
-    if (!fs.existsSync(filepath)) {
+    const storedFile = video.gridfsId
+      ? await findVideoFile(video.gridfsId)
+      : null;
+    if (!storedFile) {
       return res.status(404).json({ message: "Video file is unavailable" });
     }
 
@@ -43,7 +44,14 @@ export const downloadVideo = async (req, res) => {
       video: video._id,
     });
 
-    return res.download(filepath, video.filename);
+    const safeFilename = video.filename.replace(/["\r\n]/g, "_");
+    res.setHeader("Content-Type", video.filetype || "video/mp4");
+    res.setHeader("Content-Length", storedFile.length);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${safeFilename}"`
+    );
+    return openVideoStream(storedFile._id).pipe(res);
   } catch (error) {
     console.error("Download error:", error);
     return res.status(500).json({ message: "Unable to download video" });

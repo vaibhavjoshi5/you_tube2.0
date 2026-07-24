@@ -18,12 +18,12 @@ const VideoUploader = ({ channelId, channelName }: any) => {
     const files = e.target.files;
     if (files && files.length > 0) {
       const file = files[0];
-      if (!file.type.startsWith("video/")) {
-        toast.error("Please upload a valid video file.");
+      if (file.type !== "video/mp4") {
+        toast.error("Please upload an MP4 video file.");
         return;
       }
-      if (file.size > 100 * 1024 * 1024) {
-        toast.error("File size exceeds 100MB limit.");
+      if (file.size > 4 * 1024 * 1024) {
+        toast.error("The hosted demo accepts videos up to 4 MB.");
         return;
       }
       setVideoFile(file);
@@ -62,10 +62,7 @@ const VideoUploader = ({ channelId, channelName }: any) => {
     try {
       setIsUploading(true);
       setUploadProgress(0);
-      const res = await axiosInstance.post("/video/upload", formdata, {
-         headers: {
-    "Content-Type": "multipart/form-data", // ✅ MUST for FormData
-  },
+      await axiosInstance.post("/video/upload", formdata, {
         onUploadProgress: (progresEvent: any) => {
           const progress = Math.round(
             (progresEvent.loaded * 100) / progresEvent.total
@@ -77,7 +74,10 @@ const VideoUploader = ({ channelId, channelName }: any) => {
       resetForm();
     } catch (error) {
       console.error("Error uploading video:", error);
-      toast.error("There was an error uploading your video. Please try again.");
+      toast.error(
+        (error as any)?.response?.data?.message ||
+          "There was an error uploading your video. Please try again."
+      );
     } finally {
       setIsUploading(false);
     }
@@ -100,13 +100,13 @@ const VideoUploader = ({ channelId, channelName }: any) => {
               or click to select files
             </p>
             <p className="text-xs text-gray-400 mt-4">
-              MP4, WebM, MOV or AVI • Up to 100MB
+              MP4 • Up to 4 MB on the hosted demo
             </p>
             <input
               type="file"
               ref={fileInputRef}
               className="hidden"
-              accept="video/*"
+              accept="video/mp4"
               onChange={handlefilechange}
             />
           </div>

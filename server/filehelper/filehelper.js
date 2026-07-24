@@ -1,22 +1,21 @@
 "use strict";
 import multer from "multer";
-const storage = multer.diskStorage({
-  destination: (req, res, cb) => {
-    cb(null, "uploads");
-  },
-  filename: (req, file, cb) => {
-    cb(
-      null,
-      new Date().toISOString().replace(/:/g, "-") + "-" + file.originalname
-    );
-  },
-});
+
+const MAX_VIDEO_SIZE = 4 * 1024 * 1024;
+const storage = multer.memoryStorage();
+
 const filefilter = (req, file, cb) => {
   if (file.mimetype === "video/mp4") {
     cb(null, true);
   } else {
-    cb(null, false);
+    cb(new multer.MulterError("LIMIT_UNEXPECTED_FILE", "file"));
   }
 };
-const upload = multer({ storage: storage, fileFilter: filefilter });
+
+const upload = multer({
+  storage,
+  fileFilter: filefilter,
+  limits: { fileSize: MAX_VIDEO_SIZE, files: 1 },
+});
+
 export default upload;
