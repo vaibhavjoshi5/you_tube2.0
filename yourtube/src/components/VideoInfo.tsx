@@ -104,6 +104,21 @@ const VideoInfo = ({ video }: any) => {
 
     setIsDownloading(true);
     try {
+      if (!video.gridfsId) {
+        const response = await axiosInstance.get(`/download/${video._id}`);
+        const anchor = document.createElement("a");
+        anchor.href = response.data.downloadUrl;
+        anchor.download =
+          response.data.filename ||
+          video.filename ||
+          `${video.videotitle}.mp4`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        toast.success("Video download started");
+        return;
+      }
+
       const response = await axiosInstance.get(`/download/${video._id}`, {
         responseType: "blob",
       });

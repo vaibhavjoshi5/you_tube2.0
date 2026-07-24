@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { plans } from "../config/plans.js";
 import { isSouthernState } from "../utils/location.js";
 import { hashOtp, otpMatches } from "../utils/otp.js";
+import { getPublicBlobDownloadUrl } from "../services/blobDownload.js";
 
 process.env.JWT_SECRET = "test-secret";
 
@@ -25,4 +26,29 @@ test("OTP comparison accepts only the matching code", () => {
   const hash = hashOtp("123456");
   assert.equal(otpMatches("123456", hash), true);
   assert.equal(otpMatches("654321", hash), false);
+});
+
+test("public Vercel Blob URLs are converted to download URLs", () => {
+  assert.equal(
+    getPublicBlobDownloadUrl(
+      "https://example.public.blob.vercel-storage.com/videos/demo.mp4"
+    ),
+    "https://example.public.blob.vercel-storage.com/videos/demo.mp4?download=1"
+  );
+  assert.equal(
+    getPublicBlobDownloadUrl(
+      "https://example.public.blob.vercel-storage.com/videos/demo.mp4?x=1"
+    ),
+    "https://example.public.blob.vercel-storage.com/videos/demo.mp4?x=1&download=1"
+  );
+});
+
+test("non-Vercel URLs cannot be used as download redirects", () => {
+  assert.equal(getPublicBlobDownloadUrl("https://example.com/video.mp4"), null);
+  assert.equal(
+    getPublicBlobDownloadUrl(
+      "https://example.public.blob.vercel-storage.com.evil.test/video.mp4"
+    ),
+    null
+  );
 });

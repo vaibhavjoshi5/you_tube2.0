@@ -2,6 +2,7 @@ import downloads from "../Modals/download.js";
 import videos from "../Modals/video.js";
 import { plans } from "../config/plans.js";
 import { findVideoFile, openVideoStream } from "../services/videoStorage.js";
+import { getPublicBlobDownloadUrl } from "../services/blobDownload.js";
 
 const startOfTodayInIst = () => {
   const offset = 330 * 60 * 1000;
@@ -35,7 +36,10 @@ export const downloadVideo = async (req, res) => {
     const storedFile = video.gridfsId
       ? await findVideoFile(video.gridfsId)
       : null;
-    if (!storedFile) {
+    const blobDownloadUrl = !video.gridfsId
+      ? getPublicBlobDownloadUrl(video.filepath)
+      : null;
+    if (!storedFile && !blobDownloadUrl) {
       return res.status(404).json({ message: "Video file is unavailable" });
     }
 
@@ -45,6 +49,13 @@ export const downloadVideo = async (req, res) => {
     });
 
     const safeFilename = video.filename.replace(/["\r\n]/g, "_");
+    if (blobDownloadUrl) {
+      return res.status(200).json({
+        downloadUrl: blobDownloadUrl,
+        filename: safeFilename,
+      });
+    }
+
     res.setHeader("Content-Type", video.filetype || "video/mp4");
     res.setHeader("Content-Length", storedFile.length);
     res.setHeader(
