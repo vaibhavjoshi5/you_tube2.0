@@ -131,27 +131,53 @@ export const verifyLogin = async (req, res) => {
 
 export const getProfile = async (req, res) =>
   res.status(200).json({ result: req.user });
+
+export const getPublicProfile = async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(404).json({ message: "Channel not found" });
+  }
+
+  try {
+    const profile = await users
+      .findById(req.params.id)
+      .select("_id name channelname description image joinedon");
+
+    if (!profile) {
+      return res.status(404).json({ message: "Channel not found" });
+    }
+
+    return res.status(200).json(profile);
+  } catch (error) {
+    console.error("Public profile error:", error);
+    return res.status(500).json({ message: "Unable to load channel" });
+  }
+};
+
 export const updateprofile = async (req, res) => {
   const { id: _id } = req.params;
   const { channelname, description } = req.body;
+
   if (!mongoose.Types.ObjectId.isValid(_id)) {
-    return res.status(500).json({ message: "User unavailable..." });
+    return res.status(404).json({ message: "User unavailable" });
   }
+
   if (req.user._id.toString() !== _id) {
     return res.status(403).json({ message: "You cannot edit this profile" });
   }
+
   try {
     const updatedata = await users.findByIdAndUpdate(
       _id,
       {
         $set: {
-          channelname: channelname,
-          description: description,
+          channelname,
+          description,
         },
       },
       { new: true }
     );
-    return res.status(201).json(updatedata);
+
+    return res.status(200).json(updatedata);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Something went wrong" });

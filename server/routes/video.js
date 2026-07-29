@@ -1,6 +1,8 @@
 import express from "express";
 import {
+  deleteVideo,
   getallvideo,
+  getChannelVideos,
   registervideo,
   streamVideo,
   uploadvideo,
@@ -12,7 +14,7 @@ import { handleUpload } from "@vercel/blob/client";
 const routes = express.Router();
 
 routes.post("/upload", requireAuth, upload.single("file"), uploadvideo);
-routes.post("/blob-upload", async (req, res, next) => {
+routes.post("/blob-upload", async (req, res) => {
   const isTokenRequest = req.body?.type === "blob.generate-client-token";
 
   const createToken = async () => {
@@ -45,7 +47,11 @@ routes.post("/blob-upload", async (req, res, next) => {
   if (!isTokenRequest) return createToken();
   return requireAuth(req, res, createToken);
 });
+
 routes.post("/register", requireAuth, registervideo);
 routes.get("/getall", getallvideo);
+routes.get("/channel/:channelId", getChannelVideos);
 routes.get("/stream/:fileId", streamVideo);
+routes.delete("/:videoId", requireAuth, deleteVideo);
+
 export default routes;

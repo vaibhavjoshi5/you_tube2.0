@@ -2,6 +2,7 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import {
   getProfile,
+  getPublicProfile,
   startLogin,
   updateprofile,
   verifyLogin,
@@ -20,5 +21,7 @@ const authLimiter = rateLimit({
 routes.post("/auth/start", authLimiter, startLogin);
 routes.post("/auth/verify", authLimiter, verifyLogin);
 routes.get("/me", requireAuth, getProfile);
+routes.get("/profile/:id", getPublicProfile);
 routes.patch("/update/:id", requireAuth, updateprofile);
+
 export default routes;
