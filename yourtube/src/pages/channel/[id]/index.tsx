@@ -91,6 +91,14 @@ const ChannelPage = () => {
               channelName={
                 channel.channelname || channel.name || "My channel"
               }
+              onUploaded={(newVideo) =>
+                setVideos((currentVideos) => [
+                  newVideo,
+                  ...currentVideos.filter(
+                    (video) => video._id !== newVideo._id
+                  ),
+                ])
+              }
             />
           </div>
         )}
@@ -99,7 +107,7 @@ const ChannelPage = () => {
           <ChannelVideos
             videos={videos}
             isOwner={isOwner}
-            onDeleted={(videoId: string) =>
+            onDeleted={(videoId) =>
               setVideos((currentVideos) =>
                 currentVideos.filter((video) => video._id !== videoId)
               )

@@ -1,77 +1,68 @@
 import Comments from "@/components/Comments";
 import RelatedVideos from "@/components/RelatedVideos";
+import type { ChannelVideo } from "@/components/ChannelVideos";
 import VideoInfo from "@/components/VideoInfo";
-import Videopplayer from "@/components/Videopplayer";
+import VideoPlayer from "@/components/Videopplayer";
 import axiosInstance from "@/lib/axiosinstance";
+import axios from "axios";
 import { useRouter } from "next/router";
-import React, { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
-const index = () => {
+const getLoadError = (error: unknown) => {
+  if (axios.isAxiosError<{ message?: string }>(error)) {
+    return error.response?.data?.message || "Video could not be loaded";
+  }
+  return "Video could not be loaded";
+};
+
+const WatchPage = () => {
   const router = useRouter();
   const { id } = router.query;
-  const [videos, setvideo] = useState<any>(null);
-  const [video, setvide] = useState<any>(null);
-  const [loading, setloading] = useState(true);
+  const [currentVideo, setCurrentVideo] = useState<ChannelVideo | null>(null);
+  const [allVideos, setAllVideos] = useState<ChannelVideo[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const videoId = typeof id === "string" ? id : "";
+
   useEffect(() => {
-    const fetchvideo = async () => {
-      if (!id || typeof id !== "string") return;
+    if (!router.isReady || !videoId) return;
+
+    const fetchVideo = async () => {
+      setLoading(true);
       try {
-        const res = await axiosInstance.get("/video/getall");
-        const video = res.data?.filter((vid: any) => vid._id === id);
-        setvideo(video[0]);
-        setvide(res.data);
-      } catch (error) {
-        console.log(error);
+        const response = await axiosInstance.get<ChannelVideo[]>("/video/getall");
+        const selectedVideo = response.data.find(
+          (video) => video._id === videoId
+        );
+
+        setCurrentVideo(selectedVideo || null);
+        setAllVideos(response.data);
+      } catch (error: unknown) {
+        setCurrentVideo(null);
+        setAllVideos([]);
+        toast.error(getLoadError(error));
       } finally {
-        setloading(false);
+        setLoading(false);
       }
     };
-    fetchvideo();
-  }, [id]);
-  // const relatedVideos = [
-  //   {
-  //     _id: "1",
-  //     videotitle: "Amazing Nature Documentary",
-  //     filename: "nature-doc.mp4",
-  //     filetype: "video/mp4",
-  //     filepath: "/videos/nature-doc.mp4",
-  //     filesize: "500MB",
-  //     videochanel: "Nature Channel",
-  //     Like: 1250,
-  //     Dislike: 50,
-  //     views: 45000,
-  //     uploader: "nature_lover",
-  //     createdAt: new Date().toISOString(),
-  //   },
-  //   {
-  //     _id: "2",
-  //     videotitle: "Cooking Tutorial: Perfect Pasta",
-  //     filename: "pasta-tutorial.mp4",
-  //     filetype: "video/mp4",
-  //     filepath: "/videos/pasta-tutorial.mp4",
-  //     filesize: "300MB",
-  //     videochanel: "Chef's Kitchen",
-  //     Like: 890,
-  //     Dislike: 20,
-  //     views: 23000,
-  //     uploader: "chef_master",
-  //     createdAt: new Date(Date.now() - 86400000).toISOString(),
-  //   },
-  // ];
-  if (loading) {
-    return <div>Loading..</div>;
-  }
-  
-  if (!videos) {
-    return <div>Video not found</div>;
-  }
+
+    void fetchVideo();
+  }, [router.isReady, videoId]);
+
+  const relatedVideos = useMemo(
+    () => allVideos.filter((video) => video._id !== currentVideo?._id),
+    [allVideos, currentVideo?._id]
+  );
+
   const handleNextVideo = () => {
-    const currentIndex = video?.findIndex(
-      (item: any) => item._id === videos._id
+    if (!currentVideo || relatedVideos.length === 0) return;
+    const currentIndex = allVideos.findIndex(
+      (video) => video._id === currentVideo._id
     );
-    if (currentIndex >= 0 && video?.length > 1) {
-      const nextVideo = video[(currentIndex + 1) % video.length];
-      router.push(`/watch/${nextVideo._id}`);
+    const nextVideo = allVideos[(currentIndex + 1) % allVideos.length];
+    if (nextVideo) {
+      void router.push(`/watch/${nextVideo._id}`);
     }
   };
 
@@ -82,26 +73,34 @@ const index = () => {
     });
   };
 
+  if (loading) {
+    return <div className="p-8 text-center">Loading video...</div>;
+  }
+
+  if (!currentVideo) {
+    return <div className="p-8 text-center">Video not found.</div>;
+  }
+
   return (
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-7xl p-3 sm:p-4 lg:p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-4">
-            <Videopplayer
-              video={videos}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="space-y-4 lg:col-span-2">
+            <VideoPlayer
+              video={currentVideo}
               onNext={handleNextVideo}
               onOpenComments={openComments}
             />
-            <VideoInfo video={videos} />
-            <Comments videoId={id} />
+            <VideoInfo video={currentVideo} />
+            <Comments videoId={videoId} />
           </div>
-          <div className="space-y-4">
-            <RelatedVideos videos={video} />
-          </div>
+          <aside className="space-y-4">
+            <RelatedVideos videos={relatedVideos} />
+          </aside>
         </div>
       </div>
     </main>
   );
 };
 
-export default index;
+export default WatchPage;
