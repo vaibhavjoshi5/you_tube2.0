@@ -6,11 +6,10 @@ import { paidPlanNames, plans } from "../config/plans.js";
 import { createInvoice } from "../utils/invoice.js";
 import { sendInvoiceEmail } from "../utils/notifications.js";
 
-const getRazorpay = () => {
-  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-    throw new Error("Razorpay is not configured");
-  }
+const hasRazorpayConfig = () =>
+  Boolean(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET);
 
+const getRazorpay = () => {
   return new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,
     key_secret: process.env.RAZORPAY_KEY_SECRET,
@@ -26,6 +25,25 @@ export const createOrder = async (req, res) => {
 
   try {
     const selectedPlan = plans[plan];
+    if (!hasRazorpayConfig()) {
+      const orderId = `order_demo_${Date.now()}`;
+      await payments.create({
+        user: req.user._id,
+        plan,
+        amount: selectedPlan.amount,
+        razorpayOrderId: orderId,
+      });
+
+      return res.status(201).json({
+        demo: true,
+        orderId,
+        amount: selectedPlan.amount * 100,
+        currency: "INR",
+        keyId: "rzp_test_demo",
+        plan: selectedPlan,
+      });
+    }
+
     const razorpay = getRazorpay();
     const order = await razorpay.orders.create({
       amount: selectedPlan.amount * 100,
@@ -64,22 +82,25 @@ export const verifyPayment = async (req, res) => {
     razorpay_signature: signature,
   } = req.body;
 
-  if (!orderId || !paymentId || !signature) {
+  const demo = orderId?.startsWith("order_demo_");
+  if (!orderId || !paymentId || (!demo && !signature)) {
     return res.status(400).json({ message: "Incomplete payment response" });
   }
 
   try {
-    const expected = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(`${orderId}|${paymentId}`)
-      .digest("hex");
+    if (!demo) {
+      const expected = crypto
+        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+        .update(`${orderId}|${paymentId}`)
+        .digest("hex");
 
-    const valid =
-      expected.length === signature.length &&
-      crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+      const valid =
+        expected.length === signature.length &&
+        crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
 
-    if (!valid) {
-      return res.status(400).json({ message: "Payment verification failed" });
+      if (!valid) {
+        return res.status(400).json({ message: "Payment verification failed" });
+      }
     }
 
     const payment = await payments.findOne({

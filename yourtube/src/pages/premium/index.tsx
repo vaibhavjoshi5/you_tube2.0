@@ -64,12 +64,24 @@ export default function PremiumPage() {
 
     setProcessing(plan);
     try {
+      const response = await axiosInstance.post("/payment/order", { plan });
+      const order = response.data;
+
+      if (order.demo) {
+        const verification = await axiosInstance.post("/payment/verify", {
+          razorpay_order_id: order.orderId,
+          razorpay_payment_id: `pay_demo_${order.orderId}`,
+        });
+        updateUser(verification.data.result);
+        toast.success(`${order.plan.name} demo plan activated`);
+        setProcessing(null);
+        return;
+      }
+
       if (!(await loadRazorpay())) {
         throw new Error("Razorpay checkout could not be loaded");
       }
 
-      const response = await axiosInstance.post("/payment/order", { plan });
-      const order = response.data;
       const razorpay = new window.Razorpay({
         key: order.keyId,
         amount: order.amount,
