@@ -3,21 +3,22 @@ import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { getMediaUrl } from "@/lib/media";
+import VideoDurationBadge from "./VideoDurationBadge";
 
 export default function VideoCard({ video }: any) {
+  const videoUrl = getMediaUrl(video?.filepath);
+
   return (
     <Link href={`/watch/${video?._id}`} className="group">
       <div className="space-y-3">
         <div className="relative aspect-video rounded-lg overflow-hidden bg-gray-100">
           <video
-            src={getMediaUrl(video?.filepath)}
+            src={videoUrl}
             className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
             preload="metadata"
             muted
           />
-          <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-1 rounded">
-            10:24
-          </div>
+          <VideoDurationBadge src={videoUrl} />
         </div>
         <div className="flex gap-3">
           <Avatar className="w-9 h-9 flex-shrink-0">

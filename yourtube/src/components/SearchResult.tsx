@@ -2,7 +2,33 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import axiosInstance from "@/lib/axiosinstance";
+import { getMediaUrl } from "@/lib/media";
+import VideoDurationBadge from "./VideoDurationBadge";
+
 const SearchResult = ({ query }: any) => {
+  const [video, setvideos] = useState<any>(null);
+  const videos = async () => {
+    try {
+      const response = await axiosInstance.get("/video/getall");
+      const results = response.data.filter(
+        (vid: any) =>
+          vid.videotitle.toLowerCase().includes(query.toLowerCase()) ||
+          vid.videochanel.toLowerCase().includes(query.toLowerCase())
+      );
+      setvideos(results);
+    } catch (error) {
+      console.error("Search failed:", error);
+      setvideos([]);
+    }
+  };
+  useEffect(() => {
+    if (query.trim()) {
+      videos();
+    } else {
+      setvideos(null);
+    }
+  }, [query]);
   if (!query.trim()) {
     return (
       <div className="text-center py-12">
@@ -12,46 +38,6 @@ const SearchResult = ({ query }: any) => {
       </div>
     );
   }
-  const [video, setvideos] = useState<any>(null);
-  const videos = async () => {
-    const allVideos = [
-      {
-        _id: "1",
-        videotitle: "Amazing Nature Documentary",
-        filename: "nature-doc.mp4",
-        filetype: "video/mp4",
-        filepath: "/videos/nature-doc.mp4",
-        filesize: "500MB",
-        videochanel: "Nature Channel",
-        Like: 1250,
-        views: 45000,
-        uploader: "nature_lover",
-        createdAt: new Date().toISOString(),
-      },
-      {
-        _id: "2",
-        videotitle: "Cooking Tutorial: Perfect Pasta",
-        filename: "pasta-tutorial.mp4",
-        filetype: "video/mp4",
-        filepath: "/videos/pasta-tutorial.mp4",
-        filesize: "300MB",
-        videochanel: "Chef's Kitchen",
-        Like: 890,
-        views: 23000,
-        uploader: "chef_master",
-        createdAt: new Date(Date.now() - 86400000).toISOString(),
-      },
-    ];
-    let results = allVideos.filter(
-      (vid) =>
-        vid.videotitle.toLowerCase().includes(query.toLowerCase()) ||
-        vid.videochanel.toLowerCase().includes(query.toLowerCase())
-    );
-    setvideos(results);
-  };
-  useEffect(() => {
-    videos();
-  }, [query]);
   if (!video) {
     return (
       <div className="text-center py-12">
@@ -73,7 +59,6 @@ const SearchResult = ({ query }: any) => {
       </div>
     );
   }
-  const vids = "/video/vdo.mp4";
   return (
     <div className="space-y-6">
       {/* Video Results */}
@@ -84,12 +69,12 @@ const SearchResult = ({ query }: any) => {
               <Link href={`/watch/${video._id}`} className="flex-shrink-0">
                 <div className="relative w-80 aspect-video bg-gray-100 rounded-lg overflow-hidden">
                   <video
-                    src={vids}
+                    src={getMediaUrl(video.filepath)}
                     className="object-cover group-hover:scale-105 transition-transform duration-200"
+                    preload="metadata"
+                    muted
                   />
-                  <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-1 rounded">
-                    10:24
-                  </div>
+                  <VideoDurationBadge src={getMediaUrl(video.filepath)} />
                 </div>
               </Link>
 
@@ -124,9 +109,7 @@ const SearchResult = ({ query }: any) => {
                 </Link>
 
                 <p className="text-sm text-gray-700 line-clamp-2">
-                  Sample video description that would show search-relevant
-                  content and help users understand what the video is about
-                  before clicking.
+                  {video.filename || "No description provided."}
                 </p>
               </div>
             </div>
@@ -138,7 +121,7 @@ const SearchResult = ({ query }: any) => {
       {hasResults && (
         <div className="text-center py-8">
           <p className="text-gray-600">
-            Showing {videos.length} results for "{query}"
+            Showing {video.length} results for "{query}"
           </p>
         </div>
       )}

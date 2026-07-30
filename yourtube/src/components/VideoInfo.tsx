@@ -161,7 +161,7 @@ const VideoInfo = ({ video }: any) => {
           </Avatar>
           <div>
             <h3 className="font-medium">{video.videochanel}</h3>
-            <p className="text-sm text-gray-600">1.2M subscribers</p>
+            <p className="text-sm text-gray-600">Creator channel</p>
           </div>
           <Button className="ml-4">Subscribe</Button>
         </div>
@@ -240,8 +240,7 @@ const VideoInfo = ({ video }: any) => {
         </div>
         <div className={`text-sm ${showFullDescription ? "" : "line-clamp-3"}`}>
           <p>
-            Sample video description. This would contain the actual video
-            description from the database.
+            No description provided.
           </p>
         </div>
         <Button
