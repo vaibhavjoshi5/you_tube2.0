@@ -4,6 +4,12 @@ YourTube is the existing training project extended with all six ElevanceSkills
 internship assignments. It uses Next.js, React, Tailwind CSS, Express,
 MongoDB, Firebase Authentication, Razorpay and WebRTC.
 
+## Live deployment
+
+- Frontend submission URL: https://yourtube-vaibhav.vercel.app
+- Backend API URL: https://yourtube-api-xi.vercel.app
+- GitHub repository: https://github.com/vaibhavjoshi5/you_tube2.0
+
 ## Training project continuity
 
 This internship submission is built directly on the YouTube training source
@@ -104,8 +110,10 @@ npm run build
 - Create a second Vercel project with Root Directory `yourtube` for Next.js.
 - Set the server project variables from `server/.env.example`.
 - Set the frontend project variables from `yourtube/.env.example`.
-- Set the backend `CLIENT_URL` to the Vercel URL.
-- Set the frontend `NEXT_PUBLIC_BACKEND_URL` to the API Vercel URL.
+- Set the backend `CLIENT_URL` to the frontend Vercel URL:
+  `https://yourtube-vaibhav.vercel.app`.
+- Set the frontend `NEXT_PUBLIC_BACKEND_URL` to the API Vercel URL:
+  `https://yourtube-api-xi.vercel.app`.
 - Add the Vercel domain to Firebase Authentication's authorized domains.
 - Use Razorpay test keys until evaluation is complete.
 
