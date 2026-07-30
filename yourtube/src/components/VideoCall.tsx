@@ -166,7 +166,7 @@ export default function VideoCall({ initialRoom = "" }: VideoCallProps) {
 
     for (const signal of signals) {
       signalCursor.current = signal.id;
-      if (signal.type === "join" && peerId.current < signal.from) {
+      if (signal.type === "join") {
         const connection = createPeer();
         const offer = await connection.createOffer();
         await connection.setLocalDescription(offer);
