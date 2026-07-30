@@ -43,18 +43,60 @@ export default function VideoCall({ initialRoom = "" }: VideoCallProps) {
     if (initialRoom) setRoomId(initialRoom);
   }, [initialRoom]);
 
+  useEffect(() => {
+    if (!joined) return;
+    if (localVideo.current && localStream.current) {
+      localVideo.current.srcObject = localStream.current;
+    }
+    if (remoteVideo.current && remoteStream.current) {
+      remoteVideo.current.srcObject = remoteStream.current;
+    }
+  }, [joined]);
+
   useEffect(
     () => () => {
-      if (pollTimer.current) clearInterval(pollTimer.current);
-      peer.current?.close();
-      localStream.current?.getTracks().forEach((track) => track.stop());
+      stopPolling();
+      resetPeer();
+      stopLocalMedia();
       recordingCleanup.current?.();
     },
     []
   );
 
+  const stopPolling = () => {
+    if (pollTimer.current) clearInterval(pollTimer.current);
+    pollTimer.current = null;
+  };
+
+  const stopLocalMedia = () => {
+    localStream.current?.getTracks().forEach((track) => track.stop());
+    localStream.current = null;
+    if (localVideo.current) localVideo.current.srcObject = null;
+  };
+
+  const clearRemoteMedia = () => {
+    remoteStream.current?.getTracks().forEach((track) => track.stop());
+    remoteStream.current = null;
+    if (remoteVideo.current) remoteVideo.current.srcObject = null;
+  };
+
+  const resetPeer = () => {
+    peer.current?.close();
+    peer.current = null;
+    pendingCandidates.current = [];
+    clearRemoteMedia();
+    setConnected(false);
+  };
+
   const createPeer = () => {
-    if (peer.current) return peer.current;
+    if (
+      peer.current &&
+      !["closed", "failed", "disconnected"].includes(peer.current.connectionState)
+    ) {
+      return peer.current;
+    }
+
+    resetPeer();
     const connection = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     });
@@ -64,7 +106,8 @@ export default function VideoCall({ initialRoom = "" }: VideoCallProps) {
     });
     connection.ontrack = (event) => {
       if (!remoteStream.current) remoteStream.current = new MediaStream();
-      event.streams[0].getTracks().forEach((track) => {
+      const tracks = event.streams[0]?.getTracks() || [event.track];
+      tracks.forEach((track) => {
         if (!remoteStream.current?.getTracks().some((item) => item.id === track.id)) {
           remoteStream.current?.addTrack(track);
         }
@@ -78,7 +121,11 @@ export default function VideoCall({ initialRoom = "" }: VideoCallProps) {
       }
     };
     connection.onconnectionstatechange = () => {
-      setConnected(connection.connectionState === "connected");
+      const state = connection.connectionState;
+      setConnected(state === "connected");
+      if (state === "failed" || state === "closed") {
+        clearRemoteMedia();
+      }
     };
     peer.current = connection;
     return connection;
@@ -96,6 +143,7 @@ export default function VideoCall({ initialRoom = "" }: VideoCallProps) {
       }),
     });
     if (!response.ok) throw new Error("Call signaling failed");
+    return response.json();
   };
 
   const flushCandidates = async () => {
@@ -140,9 +188,7 @@ export default function VideoCall({ initialRoom = "" }: VideoCallProps) {
           pendingCandidates.current.push(signal.payload);
         }
       } else if (signal.type === "leave") {
-        setConnected(false);
-        remoteStream.current = null;
-        if (remoteVideo.current) remoteVideo.current.srcObject = null;
+        resetPeer();
       }
     }
   };
@@ -154,6 +200,13 @@ export default function VideoCall({ initialRoom = "" }: VideoCallProps) {
     }
 
     try {
+      stopPolling();
+      resetPeer();
+      stopLocalMedia();
+      setMuted(false);
+      setCameraOff(false);
+      setRecording(false);
+
       localStream.current = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true,
@@ -162,8 +215,8 @@ export default function VideoCall({ initialRoom = "" }: VideoCallProps) {
 
       peerId.current = crypto.randomUUID();
       signalCursor.current = "";
-      await sendSignal("join");
-      await processSignals();
+      const joinSignal = await sendSignal("join");
+      signalCursor.current = joinSignal.id || "";
       pollTimer.current = setInterval(() => {
         processSignals().catch((error) => console.error(error));
       }, 1000);
@@ -176,15 +229,14 @@ export default function VideoCall({ initialRoom = "" }: VideoCallProps) {
 
   const leaveCall = () => {
     sendSignal("leave").catch(() => undefined);
-    if (pollTimer.current) clearInterval(pollTimer.current);
-    pollTimer.current = null;
-    peer.current?.close();
-    localStream.current?.getTracks().forEach((track) => track.stop());
-    remoteStream.current?.getTracks().forEach((track) => track.stop());
-    peer.current = null;
-    pendingCandidates.current = [];
+    if (recording) stopRecording();
+    stopPolling();
+    resetPeer();
+    stopLocalMedia();
+    signalCursor.current = "";
     setJoined(false);
-    setConnected(false);
+    setMuted(false);
+    setCameraOff(false);
   };
 
   const toggleAudio = () => {
