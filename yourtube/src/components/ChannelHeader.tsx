@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Button } from "./ui/button";
+import axiosInstance from "@/lib/axiosinstance";
+import { toast } from "sonner";
 
 interface ChannelSummary {
   _id: string;
@@ -20,10 +22,46 @@ interface ChannelHeaderProps {
 
 const ChannelHeader = ({ channel, user }: ChannelHeaderProps) => {
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [subscriberCount, setSubscriberCount] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
   const channelName =
     channel.channelname || channel.name || "YourTube channel";
   const isDifferentUser =
     Boolean(user?._id) && String(user?._id) !== String(channel._id);
+
+  useEffect(() => {
+    if (!isDifferentUser) {
+      setIsSubscribed(false);
+      setSubscriberCount(null);
+      return;
+    }
+
+    const loadSubscription = async () => {
+      try {
+        const response = await axiosInstance.get(`/user/subscription/${channel._id}`);
+        setIsSubscribed(response.data.subscribed);
+        setSubscriberCount(response.data.subscriberCount);
+      } catch (error) {
+        console.log(error);
+      }
+    };
+
+    loadSubscription();
+  }, [channel._id, isDifferentUser]);
+
+  const handleSubscribe = async () => {
+    setSaving(true);
+    try {
+      const response = await axiosInstance.post(`/user/subscription/${channel._id}`);
+      setIsSubscribed(response.data.subscribed);
+      setSubscriberCount(response.data.subscriberCount);
+      toast.success(response.data.subscribed ? "Subscribed" : "Unsubscribed");
+    } catch (error) {
+      toast.error("Subscription could not be updated");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="w-full">
@@ -45,6 +83,9 @@ const ChannelHeader = ({ channel, user }: ChannelHeaderProps) => {
               <span>
                 @{channelName.toLowerCase().replace(/\s+/g, "")}
               </span>
+              {subscriberCount !== null && (
+                <span>{subscriberCount.toLocaleString()} subscribers</span>
+              )}
             </div>
             {channel.description && (
               <p className="max-w-2xl text-sm text-gray-700">
@@ -56,17 +97,16 @@ const ChannelHeader = ({ channel, user }: ChannelHeaderProps) => {
           {isDifferentUser && (
             <div className="flex gap-2">
               <Button
-                onClick={() =>
-                  setIsSubscribed((currentValue) => !currentValue)
-                }
+                onClick={handleSubscribe}
                 variant={isSubscribed ? "outline" : "default"}
+                disabled={saving}
                 className={
                   isSubscribed
                     ? "bg-gray-100"
                     : "bg-red-600 hover:bg-red-700"
                 }
               >
-                {isSubscribed ? "Subscribed" : "Subscribe"}
+                {saving ? "Saving..." : isSubscribed ? "Subscribed" : "Subscribe"}
               </Button>
             </div>
           )}

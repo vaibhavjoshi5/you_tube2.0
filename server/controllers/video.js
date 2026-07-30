@@ -6,6 +6,7 @@ import like from "../Modals/like.js";
 import history from "../Modals/history.js";
 import watchlater from "../Modals/watchlater.js";
 import downloads from "../Modals/download.js";
+import videoViews from "../Modals/videoview.js";
 import {
   deleteVideoFile,
   findVideoFile,
@@ -151,6 +152,7 @@ export const deleteVideo = async (req, res) => {
       history.deleteMany({ videoid: videoId }),
       watchlater.deleteMany({ videoid: videoId }),
       downloads.deleteMany({ video: videoId }),
+      videoViews.deleteMany({ videoid: videoId }),
     ]);
 
     await currentVideo.deleteOne();

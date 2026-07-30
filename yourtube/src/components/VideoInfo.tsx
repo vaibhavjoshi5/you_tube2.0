@@ -18,8 +18,12 @@ import { toast } from "sonner";
 const VideoInfo = ({ video }: any) => {
   const [likes, setlikes] = useState(video.Like || 0);
   const [dislikes, setDislikes] = useState(video.Dislike || 0);
+  const [viewCount, setViewCount] = useState(video.views || 0);
   const [isLiked, setIsLiked] = useState(false);
   const [isDisliked, setIsDisliked] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [subscriberCount, setSubscriberCount] = useState<number | null>(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const { user } = useUser();
   const [isWatchLater, setIsWatchLater] = useState(false);
@@ -35,26 +39,83 @@ const VideoInfo = ({ video }: any) => {
   useEffect(() => {
     setlikes(video.Like || 0);
     setDislikes(video.Dislike || 0);
+    setViewCount(video.views || 0);
     setIsLiked(false);
     setIsDisliked(false);
   }, [video]);
 
   useEffect(() => {
+    if (!video?._id) return;
+
     const handleviews = async () => {
       if (user) {
         try {
-          return await axiosInstance.post(`/history/${video._id}`, {
+          const response = await axiosInstance.post(`/history/${video._id}`, {
             userId: user?._id,
           });
+          if (typeof response.data.views === "number") {
+            setViewCount(response.data.views);
+          }
         } catch (error) {
           return console.log(error);
         }
       } else {
-        return await axiosInstance.post(`/history/views/${video?._id}`);
+        let viewerKey = localStorage.getItem("anonymousViewerKey");
+        if (!viewerKey) {
+          viewerKey = crypto.randomUUID();
+          localStorage.setItem("anonymousViewerKey", viewerKey);
+        }
+        const response = await axiosInstance.post(`/history/views/${video?._id}`, {
+          viewerKey,
+        });
+        if (typeof response.data.views === "number") {
+          setViewCount(response.data.views);
+        }
       }
     };
     handleviews();
-  }, [user]);
+  }, [video?._id, user?._id]);
+
+  useEffect(() => {
+    if (!user || !video?.uploader || String(user._id) === String(video.uploader)) {
+      setIsSubscribed(false);
+      setSubscriberCount(null);
+      return;
+    }
+
+    const loadSubscription = async () => {
+      try {
+        const response = await axiosInstance.get(`/user/subscription/${video.uploader}`);
+        setIsSubscribed(response.data.subscribed);
+        setSubscriberCount(response.data.subscriberCount);
+      } catch (error) {
+        console.log(error);
+      }
+    };
+
+    loadSubscription();
+  }, [user?._id, video?.uploader]);
+
+  const handleSubscribe = async () => {
+    if (!user) {
+      toast.error("Sign in to subscribe");
+      return;
+    }
+
+    if (!video?.uploader || String(user._id) === String(video.uploader)) return;
+
+    setSubscriptionLoading(true);
+    try {
+      const response = await axiosInstance.post(`/user/subscription/${video.uploader}`);
+      setIsSubscribed(response.data.subscribed);
+      setSubscriberCount(response.data.subscriberCount);
+      toast.success(response.data.subscribed ? "Subscribed" : "Unsubscribed");
+    } catch (error) {
+      toast.error("Subscription could not be updated");
+    } finally {
+      setSubscriptionLoading(false);
+    }
+  };
   const handleLike = async () => {
     if (!user) return;
     try {
@@ -161,9 +222,27 @@ const VideoInfo = ({ video }: any) => {
           </Avatar>
           <div>
             <h3 className="font-medium">{video.videochanel}</h3>
-            <p className="text-sm text-gray-600">Creator channel</p>
+            <p className="text-sm text-gray-600">
+              {subscriberCount === null
+                ? "Creator channel"
+                : `${subscriberCount.toLocaleString()} subscribers`}
+            </p>
           </div>
-          <Button className="ml-4">Subscribe</Button>
+          {(!user || String(user._id) !== String(video.uploader)) && (
+            <Button
+              className={`ml-4 ${
+                isSubscribed ? "bg-gray-200 text-gray-900 hover:bg-gray-300" : ""
+              }`}
+              onClick={handleSubscribe}
+              disabled={subscriptionLoading}
+            >
+              {subscriptionLoading
+                ? "Saving..."
+                : isSubscribed
+                  ? "Subscribed"
+                  : "Subscribe"}
+            </Button>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center bg-gray-100 rounded-full">
@@ -235,7 +314,7 @@ const VideoInfo = ({ video }: any) => {
       </div>
       <div className="bg-gray-100 rounded-lg p-4">
         <div className="flex gap-4 text-sm font-medium mb-2">
-          <span>{video.views.toLocaleString()} views</span>
+          <span>{viewCount.toLocaleString()} views</span>
           <span>{formatDistanceToNow(new Date(video.createdAt))} ago</span>
         </div>
         <div className={`text-sm ${showFullDescription ? "" : "line-clamp-3"}`}>

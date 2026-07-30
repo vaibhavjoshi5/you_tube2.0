@@ -1,8 +1,29 @@
-import Videogrid from "@/components/Videogrid";
+import { useEffect, useState } from "react";
+import Videocard from "@/components/videocard";
+import axiosInstance from "@/lib/axiosinstance";
 import { useUser } from "@/lib/AuthContext";
 
 export default function SubscriptionsPage() {
   const { user, handlegooglesignin } = useUser();
+  const [videos, setVideos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      setVideos([]);
+      return;
+    }
+
+    setLoading(true);
+    axiosInstance
+      .get("/user/subscriptions/videos")
+      .then((response) => setVideos(response.data))
+      .catch((error) => {
+        console.error("Unable to load subscriptions:", error);
+        setVideos([]);
+      })
+      .finally(() => setLoading(false));
+  }, [user]);
 
   return (
     <main className="w-full p-3 sm:p-4 lg:p-6">
@@ -23,7 +44,19 @@ export default function SubscriptionsPage() {
           </button>
         )}
       </div>
-      {user && <Videogrid />}
+      {user && loading && <p className="text-sm text-slate-500">Loading subscriptions...</p>}
+      {user && !loading && videos.length === 0 && (
+        <div className="rounded-xl border border-dashed p-8 text-center text-sm text-slate-500">
+          Subscribe to channels to see their latest videos here.
+        </div>
+      )}
+      {user && !loading && videos.length > 0 && (
+        <div className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          {videos.map((video) => (
+            <Videocard key={video._id} video={video} />
+          ))}
+        </div>
+      )}
     </main>
   );
 }
